@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#120d0c">
+<title>深夜面馆</title>
+<link rel="stylesheet" href="css/style.css?v=24">
+</head>
+<body>
+<a class="skip-link" href="#scene">跳到主要内容</a>
+<div id="app">
+
+  <div class="bg">
+    <div class="stars" id="stars"></div>
+    <div class="moon"></div>
+    <div class="glow"></div>
+    <div class="vignette"></div>
+  </div>
+
+  <header class="topbar">
+    <div class="brand">
+      <h1 class="brand-cn">深夜面馆</h1>
+      <div class="brand-en" id="statusText">深夜营业中</div>
+    </div>
+    <div class="top-actions">
+      <div class="stats">
+        <div class="stat">
+          <span class="stat-val" id="moneyText">0</span><span class="stat-key">金币</span>
+        </div>
+        <div class="stat">
+          <span class="stat-val" id="repText">0</span><span class="stat-key">声望</span>
+        </div>
+      </div>
+      <button class="mute-btn" id="muteBtn" type="button" aria-label="全部静音" aria-pressed="false">
+        <img id="muteIcon" src="assets/icons/volume-2.svg" alt="" width="24" height="24">
+      </button>
+    </div>
+  </header>
+
+  <main class="scene" id="scene" tabindex="-1">
+    <div class="shop">
+      <div class="sunshade"></div>
+      <div class="signboard"><span>深夜面馆</span></div>
+      <div class="lantern left"><i></i></div>
+      <div class="lantern right"><i></i></div>
+
+      <div class="window">
+        <div class="shelf">
+          <img class="shelf-ico" src="assets/icons/wine.svg" alt="" width="24" height="24">
+          <img class="shelf-ico" src="assets/icons/utensils.svg" alt="" width="24" height="24">
+          <img class="shelf-ico" src="assets/icons/leaf.svg" alt="" width="24" height="24">
+        </div>
+        <div class="pot" id="pot">
+          <div class="steam"><i></i><i></i><i></i></div>
+          <div class="pot-body"><img class="pot-img" src="assets/icons/cooking-pot.svg" alt="" width="24" height="24"></div>
+        </div>
+        <div class="cook-track"><i id="cookFill"></i></div>
+        <div class="cook-hint" id="cookHint">等你开工</div>
+      </div>
+
+      <div class="counter"></div>
+    </div>
+
+    <div class="queue-row">
+      <div class="queue" id="queue">
+        <div class="queue-empty" id="queueEmpty">街上还没人…</div>
+      </div>
+      <div class="queue-count" id="queueCount" hidden></div>
+      <button class="main-btn" id="mainBtn" type="button" aria-label="下面，加速出餐">
+        <span class="main-btn-cn">下面</span>
+      </button>
+      <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    </div>
+  </main>
+
+  <section class="panel">
+    <div class="tabs" role="tablist" aria-label="经营面板">
+      <button class="tab is-active" data-tab="upgrade" role="tab" aria-selected="true" aria-controls="tabBody" tabindex="0">经营</button>
+      <button class="tab" data-tab="daily" role="tab" aria-selected="false" aria-controls="tabBody" tabindex="-1">日常</button>
+      <button class="tab" data-tab="boost" role="tab" aria-selected="false" aria-controls="tabBody" tabindex="-1">促销</button>
+      <button class="tab" data-tab="shop" role="tab" aria-selected="false" aria-controls="tabBody" tabindex="-1">店铺</button>
+    </div>
+    <div class="tab-body" id="tabBody" role="tabpanel" aria-label="面板内容"></div>
+  </section>
+
+  <div class="float-layer" id="floatLayer"></div>
+
+  <div class="modal-mask" id="modalMask" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle" tabindex="-1">
+      <div class="modal-title" id="modalTitle">广告</div>
+      <div class="modal-body" id="modalBody"></div>
+      <button class="modal-btn" id="modalBtn">好的</button>
+    </div>
+  </div>
+
+</div>
+<script src="js/game.js?v=24"></script>
+</body>
+</html>

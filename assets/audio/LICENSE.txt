@@ -1,0 +1,5 @@
+Background music: bgm_night.ogg / bgm_night.mp3
+Generated for this project (2026-11-01) with a custom numpy synthesizer.
+Composition: 4 bars, 72 BPM, Am–F–C–G, 13.33 seconds, looped.
+No third-party samples, melodies, or recordings are included.
+You may use and modify this audio together with the game project.

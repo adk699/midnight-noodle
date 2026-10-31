@@ -1,0 +1,5 @@
+Pixel citizens: "[FREE] Citizens 1" by Ulerinn
+Source: https://ulerinn.itch.io/free-citizens-1
+License: CC0 1.0 Universal (commercial use allowed, attribution not required)
+Modifications: recolored variants, idle frames only, 3x nearest-neighbor upscale into a 8x4 atlas.
+The original asset pack may not be redistributed or sold as-is.
