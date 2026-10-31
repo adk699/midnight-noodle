@@ -21,6 +21,7 @@
 
   const DISHES = [
     { name: '阳春面',   base: 10, cook: 1.00, unlock: 1 },
+    { name: '凉面',     base: 10, cook: 1.00, unlock: 1, season: 'summer' },
     { name: '牛肉面',   base: 18, cook: 1.15, unlock: 3 },
     { name: '酸辣粉',   base: 26, cook: 1.25, unlock: 5 },
     { name: '小馄饨',   base: 36, cook: 1.35, unlock: 7 },
@@ -28,6 +29,15 @@
     { name: '葱油拌面', base: 62, cook: 1.55, unlock: 12 }
   ];
   const LOOKS = 8; // 像素顾客变体数（assets/customers/citizens_idle.png）
+
+  /* 夏夜祭：6-8 月自动开启；?summer=1 强制预览，?summer=0 强制关闭 */
+  const isSummer = (() => {
+    const q = new URLSearchParams(location.search).get('summer');
+    if (q === '1') return true;
+    if (q === '0') return false;
+    const m = new Date().getMonth() + 1;
+    return m >= 6 && m <= 8;
+  })();
 
   /* 门店扩张：按本周目进账自动升级，永久提升单价 */
   const STORES = [
@@ -118,7 +128,7 @@
   const cookTime = () => 1.9 / Math.pow(1.18, st.lv.stove - 1);
   const autoRate = () => 0.45 + st.lv.chef * 0.5;                 // 每秒推进倍率
 
-  const dishPool = () => DISHES.filter(d => st.lv.menu >= d.unlock);
+  const dishPool = () => DISHES.filter(d => st.lv.menu >= d.unlock && (!d.season || (d.season === 'summer' && isSummer)));
 
   /* 门店与老汤的永久加成 */
   function storeIndex() {
@@ -142,7 +152,7 @@
   const cookTimeFor = c => 1.9 * c.dish.cook / Math.pow(1.18, st.lv.stove - 1);
 
   function unitPrice() {                    // 全部已解锁菜品的均价，用于离线估算与促销奖励
-    const pool = dishPool();
+    const pool = dishPool().filter(d => !d.season);  // 季节限定菜不参与均价，避免影响数值
     const avg = pool.reduce((s, d) => s + d.base, 0) / pool.length;
     return avg * priceMul();
   }
@@ -196,8 +206,17 @@
     buy() { tone(660, 0.1, 'triangle', 0.05); tone(990, 0.16, 'triangle', 0.05, 0.09); },
     bad() { tone(180, 0.16, 'sawtooth', 0.035); },
     arrive() { tone(660, 0.08, 'sine', 0.022); tone(990, 0.12, 'sine', 0.018, 0.08); },
-    reward() { tone(740, 0.1, 'sine', 0.05); tone(1100, 0.1, 'sine', 0.05, 0.1); tone(1480, 0.22, 'sine', 0.05, 0.2); tone(1760, 0.3, 'sine', 0.035, 0.3); }
+    reward() { tone(740, 0.1, 'sine', 0.05); tone(1100, 0.1, 'sine', 0.05, 0.1); tone(1480, 0.22, 'sine', 0.05, 0.2); tone(1760, 0.3, 'sine', 0.035, 0.3); },
+    summerChime() { tone(1568, 0.7, 'sine', 0.012); tone(2093, 0.8, 'sine', 0.010, 0.25); tone(2637, 0.9, 'sine', 0.008, 0.55); }
   };
+
+  let summerTimer = null;
+  function startSummerAmbience() {
+    if (!isSummer || summerTimer) return;
+    summerTimer = setInterval(() => {
+      if (!document.hidden && st.sfx) sfx.summerChime();
+    }, 32000);
+  }
 
   /* ---------------- 背景音乐（合成 loop） ---------------- */
   const BGM_FILES = ['assets/audio/bgm_night.ogg?v=15', 'assets/audio/bgm_night.mp3?v=15'];
@@ -1008,7 +1027,7 @@
       if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
       else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
     });
-    const unlockAudio = () => { audio(); if (st.bgm) bgm.start(); };
+    const unlockAudio = () => { audio(); if (st.bgm) bgm.start(); startSummerAmbience(); };
     document.addEventListener('pointerdown', unlockAudio, { once: true });
     document.addEventListener('keydown', unlockAudio, { once: true });
     mainBtn.addEventListener('click', () => tapCook());
@@ -1022,6 +1041,8 @@
   }
 
   function boot() {
+    document.getElementById('app').classList.toggle('is-summer', isSummer);
+    startSummerAmbience();
     bindUI();
     syncMuteUI();
     checkDaily();
