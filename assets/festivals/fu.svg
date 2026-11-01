@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 30">
+  <rect x="3" y="3" width="24" height="24" fill="#b5372a"/>
+  <rect x="5" y="5" width="20" height="20" fill="#cf4a34"/>
+  <rect x="7" y="7" width="16" height="16" fill="none" stroke="#ffd179" stroke-width="1"/>
+  <text x="15" y="20.5" font-family="Songti SC, STSong, SimSun, serif" font-size="13" font-weight="700" fill="#ffe4b3" text-anchor="middle">福</text>
+</svg>

@@ -106,7 +106,11 @@ body{
   font-size:24px;font-weight:400;letter-spacing:5px;color:#ffe0ae;line-height:1.15;
   text-shadow:0 1px 0 rgba(0,0,0,.5);
 }
-.brand-en{font-size:11px;letter-spacing:1.5px;color:var(--muted);margin-top:4px}
+.brand{min-width:0}
+.brand-en{
+  font-size:11px;letter-spacing:1.5px;color:var(--muted);margin-top:4px;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+}
 .stats{display:flex;gap:18px;text-align:right;align-items:flex-end;flex:0 0 auto}
 .top-actions{display:flex;align-items:flex-end;gap:10px;min-width:0}
 .mute-btn{
@@ -295,9 +299,48 @@ body{
     0 -16px 32px rgba(255,150,60,.08);
 }
 
-/* ---------- 夏夜祭（6-8 月自动开启，?summer=1 可预览） ---------- */
-.summer-props{display:none;position:absolute;inset:0;pointer-events:none;z-index:3}
-#app.is-summer .summer-props{display:block}
+/* ---------- 四季与节日装饰（按真实月份自动，?season= / ?date= 可预览） ---------- */
+.season-props,.fest-props{display:none;position:absolute;inset:0;pointer-events:none;z-index:3}
+#app.is-spring .season-props,#app.is-summer .season-props,
+#app.is-autumn .season-props,#app.is-winter .season-props{display:block}
+#app.is-festival .fest-props{display:block}
+.season-set{display:none}
+#app.is-spring .set-spring,#app.is-summer .set-summer,
+#app.is-autumn .set-autumn,#app.is-winter .set-winter{display:block}
+
+.prop{position:absolute;filter:drop-shadow(0 3px 6px rgba(0,0,0,.5))}
+.prop-peach{
+  right:1%;top:43%;width:44px;height:66px;opacity:.92;
+  transform-origin:50% 0;animation:summerSway 6.4s ease-in-out infinite;
+}
+.prop-kite{
+  left:2%;top:39%;width:32px;height:42px;opacity:.9;
+  animation:birdFloat 7.5s ease-in-out infinite;
+}
+.prop-maple{
+  right:1%;top:43%;width:44px;height:59px;opacity:.92;
+  transform-origin:50% 0;animation:summerSway 5.8s ease-in-out infinite;
+}
+.prop-persimmon{left:3%;bottom:42px;width:26px;height:26px}
+.prop-snowman{
+  right:2%;bottom:42px;width:32px;height:40px;
+  transform-origin:50% 100%;animation:catBreath 5.2s ease-in-out infinite;
+}
+.prop-snow{left:4%;top:43%;width:20px;height:20px;opacity:.75;animation:snowDrift 8s ease-in-out infinite}
+@keyframes birdFloat{0%,100%{transform:translate(0,0) rotate(-2deg)}50%{transform:translate(6px,-5px) rotate(2deg)}}
+@keyframes snowDrift{0%,100%{transform:translate(0,0);opacity:.45}50%{transform:translate(5px,7px);opacity:.9}}
+
+/* 节日道具：一次只显示当前节日那一个 */
+.fest-prop{
+  display:none;position:absolute;left:50%;bottom:10px;
+  transform:translateX(-50%);filter:drop-shadow(0 3px 6px rgba(0,0,0,.5));
+  animation:festBob 5.4s ease-in-out infinite;
+}
+#app[data-fest="chunjie"] .fp-chunjie,#app[data-fest="yuanxiao"] .fp-yuanxiao,
+#app[data-fest="duanwu"] .fp-duanwu,#app[data-fest="qixi"] .fp-qixi,
+#app[data-fest="zhongqiu"] .fp-zhongqiu,#app[data-fest="dongzhi"] .fp-dongzhi{display:block}
+@keyframes festBob{0%,100%{transform:translateX(-50%) translateY(0)}50%{transform:translateX(-50%) translateY(-3px)}}
+
 .summer-chime{
   position:absolute;right:20%;top:36%;width:20px;height:40px;
   transform-origin:50% 0;opacity:.86;
@@ -339,10 +382,31 @@ body{
   0%,100%{opacity:.15;transform:translate(0,0)}
   50%{opacity:.85;transform:translate(4px,-7px)}
 }
-@media (max-height:700px){.summer-props{display:none!important}}
-@media (max-width:340px){.summer-props{display:none!important}}
+@media (max-height:700px){.season-props,.fest-props{display:none!important}}
+@media (max-width:340px){.season-props,.fest-props{display:none!important}}
 @media (prefers-reduced-motion:reduce){
-  .summer-chime,.summer-cat,.summer-fireflies i{animation:none}
+  .summer-chime,.summer-cat,.summer-fireflies i,
+  .prop-peach,.prop-kite,.prop-maple,.prop-snowman,.prop-snow,.fest-prop{animation:none}
+}
+
+/* ---------- 店面成长：店越大，门面越宽 ---------- */
+#app[data-tier="1"] .sunshade{left:7%;right:7%}
+#app[data-tier="2"] .sunshade{left:6%;right:6%}
+#app[data-tier="3"] .sunshade{left:5%;right:5%}
+#app[data-tier="4"] .sunshade{left:4%;right:4%}
+#app[data-tier="2"] .signboard,#app[data-tier="3"] .signboard,#app[data-tier="4"] .signboard{
+  border-color:rgba(255,214,150,.5);
+  box-shadow:
+    0 0 30px rgba(255,150,60,.38),
+    0 6px 18px rgba(0,0,0,.55),
+    inset 0 1px 0 rgba(255,222,175,.3),
+    inset 0 -10px 20px rgba(0,0,0,.4);
+}
+#app[data-tier="4"] .counter{
+  box-shadow:
+    inset 0 2px 0 rgba(255,222,170,.42),
+    inset 0 -14px 26px rgba(0,0,0,.55),
+    0 -16px 32px rgba(255,150,60,.14);
 }
 
 /* ---------- 顾客队列 ---------- */
@@ -505,7 +569,7 @@ body{
 }
 .tab-body{
   display:grid;grid-template-columns:repeat(2,1fr);gap:6px;
-  max-height:34vh;overflow-y:auto;
+  max-height:min(34vh,220px);overflow-y:auto;
   scrollbar-width:none;
 }
 .tab-body::-webkit-scrollbar{display:none}

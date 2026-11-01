@@ -21,22 +21,71 @@
 
   const DISHES = [
     { name: '阳春面',   base: 10, cook: 1.00, unlock: 1 },
+    { name: '春笋面',   base: 10, cook: 1.00, unlock: 1, season: 'spring' },
     { name: '凉面',     base: 10, cook: 1.00, unlock: 1, season: 'summer' },
+    { name: '蟹粉面',   base: 14, cook: 1.05, unlock: 1, season: 'autumn' },
+    { name: '羊肉汤面', base: 12, cook: 1.10, unlock: 1, season: 'winter' },
     { name: '牛肉面',   base: 18, cook: 1.15, unlock: 3 },
     { name: '酸辣粉',   base: 26, cook: 1.25, unlock: 5 },
     { name: '小馄饨',   base: 36, cook: 1.35, unlock: 7 },
     { name: '炸酱面',   base: 48, cook: 1.45, unlock: 9 },
-    { name: '葱油拌面', base: 62, cook: 1.55, unlock: 12 }
+    { name: '葱油拌面', base: 62, cook: 1.55, unlock: 12 },
+    /* 节日限定小食：只在对应节日那几天出现在菜单里 */
+    { name: '年糕',     base: 10, cook: 1.00, unlock: 1, fest: 'chunjie' },
+    { name: '汤圆',     base: 10, cook: 1.00, unlock: 1, fest: 'yuanxiao' },
+    { name: '粽子',     base: 12, cook: 1.05, unlock: 1, fest: 'duanwu' },
+    { name: '巧果',     base: 10, cook: 1.00, unlock: 1, fest: 'qixi' },
+    { name: '月饼',     base: 14, cook: 1.05, unlock: 1, fest: 'zhongqiu' },
+    { name: '饺子',     base: 12, cook: 1.05, unlock: 1, fest: 'dongzhi' }
   ];
   const LOOKS = 8; // 像素顾客变体数（assets/customers/citizens_idle.png）
 
-  /* 夏夜祭：6-8 月自动开启；?summer=1 强制预览，?summer=0 强制关闭 */
-  const isSummer = (() => {
-    const q = new URLSearchParams(location.search).get('summer');
-    if (q === '1') return true;
-    if (q === '0') return false;
+  /* ---------------- 四季与节日 ---------------- */
+  /* 四季按真实月份：3-5 春 / 6-8 夏 / 9-11 秋 / 12-2 冬
+     预览：?season=spring|summer|autumn|winter；兼容旧链接 ?summer=1 / ?summer=0 */
+  const SEASONS = {
+    spring: { name: '春', key: 'spring' },
+    summer: { name: '夏', key: 'summer' },
+    autumn: { name: '秋', key: 'autumn' },
+    winter: { name: '冬', key: 'winter' }
+  };
+  const seasonKey = (() => {
+    const q = new URLSearchParams(location.search).get('season');
+    if (q && SEASONS[q]) return q;
+    const legacy = new URLSearchParams(location.search).get('summer');
+    if (legacy === '1') return 'summer';
+    if (legacy === '0') return 'spring';
     const m = new Date().getMonth() + 1;
-    return m >= 6 && m <= 8;
+    if (m >= 3 && m <= 5) return 'spring';
+    if (m >= 6 && m <= 8) return 'summer';
+    if (m >= 9 && m <= 11) return 'autumn';
+    return 'winter';
+  })();
+  const season = SEASONS[seasonKey];
+
+  /* 节日：用固定日期窗口近似农历节日，保证相邻节日不重叠
+     预览：?date=09-20（只看节日，不改季节） */
+  const FESTIVALS = [
+    { id: 'chunjie',   name: '春节', from: [1, 20],  to: [2, 5] },
+    { id: 'yuanxiao',  name: '元宵', from: [2, 6],   to: [2, 20] },
+    { id: 'duanwu',    name: '端午', from: [6, 1],   to: [6, 15] },
+    { id: 'qixi',      name: '七夕', from: [8, 1],   to: [8, 15] },
+    { id: 'zhongqiu',  name: '中秋', from: [9, 10],  to: [9, 25] },
+    { id: 'dongzhi',   name: '冬至', from: [12, 15], to: [12, 25] }
+  ];
+  function todayMD() {
+    const q = new URLSearchParams(location.search).get('date');
+    if (q && /^\d{1,2}-\d{1,2}$/.test(q)) {
+      const [m, d] = q.split('-').map(Number);
+      return { m, d };
+    }
+    const n = new Date();
+    return { m: n.getMonth() + 1, d: n.getDate() };
+  }
+  const festival = (() => {
+    const md = todayMD();
+    const v = md.m * 100 + md.d;
+    return FESTIVALS.find(f => v >= f.from[0] * 100 + f.from[1] && v <= f.to[0] * 100 + f.to[1]) || null;
   })();
 
   /* 顾客留言：出餐后写进店铺页的留言墙 */
@@ -58,13 +107,23 @@
     '下次还来。',
     '面要趁热，话要慢慢说。'
   ];
-  const SUMMER_LINES = [
-    '夏夜的风，吹得人不想回家。',
-    '西瓜很甜，夜还长。',
-    '风铃响了，再来一碗。'
-  ];
+  const SEASON_LINES = {
+    spring: ['春风一吹，就想吃碗面。', '花开的时候，正好路过。', '燕子回来了。'],
+    summer: ['夏夜的风，吹得人不想回家。', '西瓜很甜，夜还长。', '风铃响了，再来一碗。'],
+    autumn: ['秋天了，加件外套再来。', '落叶铺了一地。', '夜里有点凉，吃口热的。'],
+    winter: ['外面好冷，进来暖暖手。', '下雪了，慢慢吃。', '汤冒着热气，真好。']
+  };
+  const FESTIVAL_LINES = {
+    chunjie:  ['过年好，吃口热的再走。', '新的一年，顺顺利利。'],
+    yuanxiao: ['汤圆甜，灯也亮。', '今晚的月亮，真圆。'],
+    duanwu:   ['艾草香，粽子刚出锅。', '河边鼓声，听着就热闹。'],
+    qixi:     ['今晚的星星，真好看。', '牛郎织女，也该见面了。'],
+    zhongqiu: ['月亮圆了，人也该团圆。', '月饼分你一半。'],
+    dongzhi:  ['冬至夜，吃碗热饺子。', '天最短，夜最长。']
+  };
   function pickLine() {
-    const pool = isSummer ? CUSTOMER_LINES.concat(SUMMER_LINES) : CUSTOMER_LINES;
+    const pool = CUSTOMER_LINES.concat(SEASON_LINES[seasonKey] || []);
+    if (festival && FESTIVAL_LINES[festival.id]) pool.push(...FESTIVAL_LINES[festival.id]);
     return pool[Math.floor(Math.random() * pool.length)];
   }
 
@@ -123,6 +182,7 @@
   }
 
   let st = loadState();
+  let lastStore = -1;      // 上次看到的门店等级，用于升级提示
   let cook = 0;            // 当前锅里的进度（秒）
   let spawnT = 0;          // 客流计时
   let rafLast = performance.now();
@@ -159,7 +219,10 @@
   const cookTime = () => 1.9 / Math.pow(1.18, st.lv.stove - 1);
   const autoRate = () => 0.45 + st.lv.chef * 0.5;                 // 每秒推进倍率
 
-  const dishPool = () => DISHES.filter(d => st.lv.menu >= d.unlock && (!d.season || (d.season === 'summer' && isSummer)));
+  const dishPool = () => DISHES.filter(d =>
+    st.lv.menu >= d.unlock &&
+    (!d.season || d.season === seasonKey) &&
+    (!d.fest || (festival && d.fest === festival.id)));
 
   /* 门店与老汤的永久加成 */
   function storeIndex() {
@@ -183,16 +246,18 @@
   const cookTimeFor = c => 1.9 * c.dish.cook / Math.pow(1.18, st.lv.stove - 1);
 
   function unitPrice() {                    // 全部已解锁菜品的均价，用于离线估算与促销奖励
-    const pool = dishPool().filter(d => !d.season);  // 季节限定菜不参与均价，避免影响数值
+    const pool = dishPool().filter(d => !d.season && !d.fest);  // 季节/节日限定菜不参与均价，避免影响数值
     const avg = pool.reduce((s, d) => s + d.base, 0) / pool.length;
     return avg * priceMul();
   }
-  const queueCap = () => 3 + (st.lv.seat - 1);
+  /* 店面越大：队伍能排更长、客人来得更勤（单价加成在 storeMul 里） */
+  const queueCap = () => 3 + (st.lv.seat - 1) + storeIndex();
   const patienceSec = () => 22 + (st.lv.decor - 1) * 1.5;
 
   function spawnInterval() {
     const peak = Date.now() < st.boost.peakUntil ? 3 : 1;
-    return Math.max(0.7, 2.9 / (1 + (st.lv.seat - 1) * 0.35 + (st.lv.decor - 1) * 0.08) / peak);
+    const crowd = 1 + storeIndex() * 0.16;   // 每升一级店面，来客速度 +16%
+    return Math.max(0.7, 2.9 / crowd / (1 + (st.lv.seat - 1) * 0.35 + (st.lv.decor - 1) * 0.08) / peak);
   }
 
   function rateNow() {
@@ -238,14 +303,24 @@
     bad() { tone(180, 0.16, 'sawtooth', 0.035); },
     arrive() { tone(660, 0.08, 'sine', 0.022); tone(990, 0.12, 'sine', 0.018, 0.08); },
     reward() { tone(740, 0.1, 'sine', 0.05); tone(1100, 0.1, 'sine', 0.05, 0.1); tone(1480, 0.22, 'sine', 0.05, 0.2); tone(1760, 0.3, 'sine', 0.035, 0.3); },
-    summerChime() { tone(1568, 0.7, 'sine', 0.012); tone(2093, 0.8, 'sine', 0.010, 0.25); tone(2637, 0.9, 'sine', 0.008, 0.55); }
+    seasonChime() {
+      if (seasonKey === 'summer') {
+        tone(1568, 0.7, 'sine', 0.012); tone(2093, 0.8, 'sine', 0.010, 0.25); tone(2637, 0.9, 'sine', 0.008, 0.55);
+      } else if (seasonKey === 'spring') {
+        tone(1760, 0.16, 'sine', 0.008); tone(2093, 0.2, 'sine', 0.006, 0.12); tone(2349, 0.14, 'sine', 0.005, 0.26);
+      } else if (seasonKey === 'autumn') {
+        tone(523, 0.6, 'sine', 0.010); tone(659, 0.7, 'sine', 0.008, 0.3); tone(392, 0.9, 'sine', 0.006, 0.6);
+      } else {
+        tone(392, 0.9, 'sine', 0.012); tone(784, 0.5, 'sine', 0.006, 0.15);
+      }
+    }
   };
 
-  let summerTimer = null;
-  function startSummerAmbience() {
-    if (!isSummer || summerTimer) return;
-    summerTimer = setInterval(() => {
-      if (!document.hidden && st.sfx) sfx.summerChime();
+  let seasonTimer = null;
+  function startSeasonAmbience() {
+    if (seasonTimer) return;
+    seasonTimer = setInterval(() => {
+      if (!document.hidden && st.sfx) sfx.seasonChime();
     }, 32000);
   }
 
@@ -614,7 +689,16 @@
         }
       }
       repText.textContent = st.rep;
-      statusText.textContent = `${store().name} · 第 ${1 + Math.floor(st.orders / 50)} 天`;
+      const seasonLabel = festival ? festival.name : season.name;
+      statusText.textContent = `${seasonLabel} · ${store().name} · ${1 + Math.floor(st.orders / 50)} 天`;
+      const tier = storeIndex();
+      if (tier !== lastStore) {
+        lastStore = tier;
+        const app = document.getElementById('app');
+        app.dataset.tier = String(tier);
+        toast(`店面升级 · ${store().name}`, 2600);
+        sfx.reward();
+      }
       updatePanel();
     }
   }
@@ -805,7 +889,9 @@
       sCard.querySelector('.card-desc').textContent = next
         ? `距下一店 ${fmt(next.at - st.runEarned)}`
         : '已是最高店面';
-      sCard.querySelector('.card-cost').innerHTML = `收益 ×${store().mul.toFixed(2)}`;
+      const crowdPct = storeIndex() * 16;
+      sCard.querySelector('.card-cost').innerHTML =
+        `收益 ×${store().mul.toFixed(2)}` + (crowdPct ? `<small>来客 +${crowdPct}%</small>` : '');
       sCard.classList.toggle('is-max', !next);
 
       const bCard = tabBody.querySelector('[data-s="broth"]');
@@ -1014,7 +1100,8 @@
         · 雇「伙计」可全自动出餐<br>
         · 客人等太久会走，扣声望<br>
         · 升级设施提升效率<br>
-        · 进账越多，店面越高级、单价越高<br>
+        · 进账越多，店面越大：来客更快、队伍更长、单价更高<br>
+        · 四季会自动换装饰和限定菜；节日那几天还有节日小食<br>
         · 进账满 20 万可「老汤转生」，老汤永久加成<br>
         · 客人出餐后会留下一句话，去店铺页看看留言墙<br>
         · 关掉页面也照常营业，回来领离线收益
@@ -1146,7 +1233,7 @@
       if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
       else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
     });
-    const unlockAudio = () => { audio(); if (st.bgm) bgm.start(); startSummerAmbience(); };
+    const unlockAudio = () => { audio(); if (st.bgm) bgm.start(); startSeasonAmbience(); };
     document.addEventListener('pointerdown', unlockAudio, { once: true });
     document.addEventListener('keydown', unlockAudio, { once: true });
     mainBtn.addEventListener('click', () => tapCook());
@@ -1160,8 +1247,15 @@
   }
 
   function boot() {
-    document.getElementById('app').classList.toggle('is-summer', isSummer);
-    startSummerAmbience();
+    const app = document.getElementById('app');
+    app.classList.add('is-' + seasonKey);
+    if (festival) {
+      app.classList.add('is-festival');
+      app.dataset.fest = festival.id;
+    }
+    app.dataset.tier = String(storeIndex());
+    lastStore = storeIndex();
+    startSeasonAmbience();
     bindUI();
     syncMuteUI();
     checkDaily();
