@@ -176,8 +176,8 @@
 
   function checkDaily() {
     if (!st.daily || st.daily.date !== todayKey()) {
+      // 只重置每日任务，不写存档：saveState 会把 lastSave 改成现在，吃掉离线收益
       st.daily = { date: todayKey(), orders: 0, earn: 0, upg: 0, claimed: {} };
-      saveState();
     }
   }
 
@@ -200,9 +200,24 @@
       const s = JSON.parse(raw);
       const base = freshState();
       const merged = Object.assign(base, s, { lv: Object.assign(base.lv, s.lv || {}), cd: Object.assign(base.cd, s.cd || {}), boost: Object.assign(base.boost, s.boost || {}) });
-      if (typeof s.runEarned !== 'number') merged.runEarned = s.totalEarned || 0;  // 老存档没有本周目进账
-      if (typeof s.broth !== 'number') merged.broth = 0;
-      if (!Array.isArray(merged.wall)) merged.wall = [];
+      /* 存档字段校验：手改坏档/旧档不能把界面变成 NaN 或 Lv.x */
+      const num = (v, d) => typeof v === 'number' && isFinite(v) ? v : d;
+      merged.money = Math.max(0, num(s.money, 30));
+      merged.totalEarned = Math.max(0, num(s.totalEarned, 0));
+      merged.runEarned = Math.max(0, num(s.runEarned, merged.totalEarned));  // 老存档没有本周目进账
+      merged.rep = Math.max(0, num(s.rep, 0));
+      merged.orders = Math.max(0, num(s.orders, 0));
+      merged.broth = Math.max(0, num(s.broth, 0));
+      for (const k of Object.keys(UPGRADES)) {
+        const min = k === 'chef' ? 0 : 1;
+        const v = Math.floor(num(s.lv && s.lv[k], base.lv[k]));
+        merged.lv[k] = Math.min(UPGRADES[k].max, Math.max(min, v));
+      }
+      if (!merged.daily || typeof merged.daily !== 'object') merged.daily = base.daily;
+      if (!merged.daily.claimed || typeof merged.daily.claimed !== 'object') merged.daily.claimed = {};
+      merged.wall = Array.isArray(merged.wall) ? merged.wall.filter(x => x && typeof x.text === 'string') : [];
+      if (!merged.cd || typeof merged.cd !== 'object') merged.cd = base.cd;
+      if (!merged.boost || typeof merged.boost !== 'object') merged.boost = base.boost;
       return merged;
     } catch (e) {
       return freshState();
@@ -210,7 +225,8 @@
   }
 
   function saveState() {
-    st.lastSave = Date.now();
+    // 页面在后台时不要把 lastSave 刷新成“现在”，否则回来时离线收益会被吃掉
+    if (!document.hidden) st.lastSave = Date.now();
     try { localStorage.setItem(SAVE_KEY, JSON.stringify(st)); } catch (e) { /* 隐私模式忽略 */ }
   }
 
@@ -252,7 +268,8 @@
   }
   /* 店面越大：队伍能排更长、客人来得更勤（单价加成在 storeMul 里） */
   const queueCap = () => 3 + (st.lv.seat - 1) + storeIndex();
-  const patienceSec = () => 22 + (st.lv.decor - 1) * 1.5;
+  /* 座位越多，客人越坐得住：队伍变长时不至于因为看不见而白白掉声望 */
+  const patienceSec = () => 22 + (st.lv.decor - 1) * 1.5 + (st.lv.seat - 1) * 6;
 
   function spawnInterval() {
     const peak = Date.now() < st.boost.peakUntil ? 3 : 1;
@@ -471,7 +488,10 @@
     if (queueCount) {
       const show = custs.length > 4;
       queueCount.hidden = !show;
-      if (show) queueCount.textContent = `${custs.length} 人`;
+      if (show) {
+        const more = queueEl.scrollWidth > queueEl.clientWidth + 1;
+        queueCount.textContent = `${custs.length} 人${more ? ' ›' : ''}`;
+      }
     }
   }
 
@@ -693,12 +713,16 @@
       statusText.textContent = `${seasonLabel} · ${store().name} · ${1 + Math.floor(st.orders / 50)} 天`;
       const tier = storeIndex();
       if (tier !== lastStore) {
+        const rising = tier > lastStore;
         lastStore = tier;
         const app = document.getElementById('app');
         app.dataset.tier = String(tier);
-        toast(`店面升级 · ${store().name}`, 2600);
-        sfx.reward();
+        if (rising) {
+          toast(`店面升级 · ${store().name}`, 2600);
+          sfx.reward();
+        }
       }
+      checkDaily();
       updatePanel();
     }
   }
@@ -1126,15 +1150,20 @@
     const broth = (st.broth || 0) + gain;
     const sfxOn = st.sfx;
     const bgmOn = st.bgm;
+    const wall = Array.isArray(st.wall) ? st.wall.slice() : [];
+    const claimed = st.daily && st.daily.claimed ? Object.assign({}, st.daily.claimed) : {};
     st = freshState();
     st.broth = broth;
     st.money = 30 + broth * 10;
     st.sfx = sfxOn;
     st.bgm = bgmOn;
+    st.wall = wall;                       // 留言是回忆，转生不抹
+    st.daily = { date: todayKey(), orders: 0, earn: 0, upg: 0, claimed };
     custs.length = 0;
     nodes.forEach(n => n.el.remove());
     nodes.clear();
     cook = 0; spawnT = 0;
+    syncQueue();
     saveState();
     closeModal();
     sfx.reward();
@@ -1154,6 +1183,7 @@
       nodes.forEach(n => n.el.remove());
       nodes.clear();
       cook = 0; spawnT = 0;
+      syncQueue();
       closeModal();
       toast('已重置');
       syncMuteUI();
