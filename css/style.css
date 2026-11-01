@@ -514,6 +514,17 @@ body{
 .card[data-s="store"],
 .card[data-s="broth"]{grid-column:span 2}
 .card-note{grid-column:span 2;justify-content:center}
+.card-wall{
+  grid-column:span 2;flex-direction:column;align-items:stretch;justify-content:flex-start;
+  gap:3px;padding:8px 10px;cursor:default;
+}
+.card-wall:active{transform:none}
+.wall-head{display:flex;align-items:center;gap:6px;font-size:11px;letter-spacing:1px;color:#ffd9a8}
+.wall-ico{width:14px;height:14px;opacity:.7}
+.wall-count{margin-left:auto;font-size:10px;color:var(--muted);letter-spacing:.5px}
+.wall-list{display:flex;flex-direction:column;gap:2px;margin-top:1px}
+.wall-line{font-size:11px;line-height:1.6;color:rgba(255,230,200,.82);white-space:normal;word-break:break-word}
+.wall-empty{font-size:11px;line-height:1.6;color:var(--muted)}
 
 .card{
   position:relative;overflow:hidden;
@@ -809,7 +820,7 @@ body{
   .stats{gap:12px}
   .stat-val{font-size:20px}
   .tab-body{grid-template-columns:1fr}
-  .card[data-d],.card[data-s="store"],.card[data-s="broth"],.card-note{grid-column:auto}
+  .card[data-d],.card[data-s="store"],.card[data-s="broth"],.card-note,.card-wall{grid-column:auto}
 }
 
 /* ---------- 无障碍：减少动效 ---------- */

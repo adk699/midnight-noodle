@@ -39,6 +39,35 @@
     return m >= 6 && m <= 8;
   })();
 
+  /* 顾客留言：出餐后写进店铺页的留言墙 */
+  const CUSTOMER_LINES = [
+    '今天也辛苦啦。',
+    '这碗面，像家里的味道。',
+    '雨停了再走。',
+    '夜班下班，先吃口热的。',
+    '一个人吃面，也挺好。',
+    '明天还要早起。',
+    '汤热，心也热。',
+    '老板，多加一份葱花。',
+    '路过，就想进来坐坐。',
+    '吃完这碗，就回家。',
+    '夜里风大，慢慢吃。',
+    '这盏灯，真暖。',
+    '一口面，一口汤。',
+    '今天没什么事，就是想坐坐。',
+    '下次还来。',
+    '面要趁热，话要慢慢说。'
+  ];
+  const SUMMER_LINES = [
+    '夏夜的风，吹得人不想回家。',
+    '西瓜很甜，夜还长。',
+    '风铃响了，再来一碗。'
+  ];
+  function pickLine() {
+    const pool = isSummer ? CUSTOMER_LINES.concat(SUMMER_LINES) : CUSTOMER_LINES;
+    return pool[Math.floor(Math.random() * pool.length)];
+  }
+
   /* 门店扩张：按本周目进账自动升级，永久提升单价 */
   const STORES = [
     { name: '路边摊',   at: 0,      mul: 1.00 },
@@ -69,7 +98,8 @@
       sfx: true,
       bgm: true,
       tutorialDone: false,
-      daily: { date: '', orders: 0, earn: 0, upg: 0, claimed: {} }
+      daily: { date: '', orders: 0, earn: 0, upg: 0, claimed: {} },
+      wall: []
     };
   }
 
@@ -112,6 +142,7 @@
       const merged = Object.assign(base, s, { lv: Object.assign(base.lv, s.lv || {}), cd: Object.assign(base.cd, s.cd || {}), boost: Object.assign(base.boost, s.boost || {}) });
       if (typeof s.runEarned !== 'number') merged.runEarned = s.totalEarned || 0;  // 老存档没有本周目进账
       if (typeof s.broth !== 'number') merged.broth = 0;
+      if (!Array.isArray(merged.wall)) merged.wall = [];
       return merged;
     } catch (e) {
       return freshState();
@@ -327,6 +358,7 @@
       id: ++custSeq,
       look: Math.floor(Math.random() * LOOKS),
       dish: pool[Math.floor(Math.random() * pool.length)],
+      line: pickLine(),
       patience: patienceSec(),
       max: patienceSec(),
       mood: 'happy'
@@ -386,7 +418,18 @@
     if (n) popAt(n.el, `+${fmt(gain)}`, false);
     else popText(`+${fmt(gain)}`, null, 0.5, 0.42);
     sfx.serve();
+    rememberLine(c.line);
     syncQueue();
+  }
+
+  function rememberLine(text) {
+    if (!text) return;
+    if (!Array.isArray(st.wall)) st.wall = [];
+    if (st.wall.slice(-3).some(x => x.text === text)) return;
+    st.wall.push({ text, t: Date.now() });
+    if (st.wall.length > 30) st.wall = st.wall.slice(-30);
+    saveState();
+    if (currentTab === 'shop') updatePanel();
   }
 
   function angry(c) {
@@ -621,6 +664,14 @@
           <div class="card-main"><div class="card-name">老汤转生 <span class="card-lv"></span></div><div class="card-desc"></div></div>
           <div class="card-cost"></div>
         </button>
+        <div class="card card-wall">
+          <div class="wall-head">
+            <img class="wall-ico" src="assets/icons/moon.svg" alt="" width="16" height="16">
+            <span>留言墙</span>
+            <span class="wall-count"></span>
+          </div>
+          <div class="wall-list"></div>
+        </div>
         <button class="card" type="button" data-m="sfx">
           <div class="card-ico"><img class="card-ico-img" src="assets/icons/volume-2.svg" alt="" width="24" height="24"></div>
           <div class="card-main"><div class="card-name">音效</div></div>
@@ -726,6 +777,27 @@
         bCard.classList.add('can-buy');
       }
 
+      const wall = tabBody.querySelector('.card-wall');
+      if (wall) {
+        const all = Array.isArray(st.wall) ? st.wall : [];
+        const recent = all.slice(-3).reverse();
+        wall.querySelector('.wall-count').textContent = all.length ? `${all.length} 条` : '';
+        const list = wall.querySelector('.wall-list');
+        list.innerHTML = '';
+        if (recent.length) {
+          for (const item of recent) {
+            const line = document.createElement('div');
+            line.className = 'wall-line';
+            line.textContent = `「${item.text}」`;
+            list.appendChild(line);
+          }
+        } else {
+          const empty = document.createElement('div');
+          empty.className = 'wall-empty';
+          empty.textContent = '今晚还没有人留下话。';
+          list.appendChild(empty);
+        }
+      }
       const sfxCard = tabBody.querySelector('[data-m="sfx"]');
       if (sfxCard) {
         sfxCard.querySelector('.card-cost').innerHTML = `<span class="sw${st.sfx ? ' is-on' : ''}"><i></i></span>`;
@@ -898,6 +970,7 @@
         · 升级设施提升效率<br>
         · 进账越多，店面越高级、单价越高<br>
         · 进账满 20 万可「老汤转生」，老汤永久加成<br>
+        · 客人出餐后会留下一句话，去店铺页看看留言墙<br>
         · 关掉页面也照常营业，回来领离线收益
       </div>`, '知道了', closeModal);
   }
