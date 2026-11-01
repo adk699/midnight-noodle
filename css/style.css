@@ -629,6 +629,31 @@ body{
   100%{opacity:0;transform:translate(-50%,-54px) scale(1)}
 }
 
+/* 顾客小气泡：点击顾客时浮在头顶 */
+.cust-bubble{
+  position:absolute;z-index:6;max-width:min(168px,48vw);
+  padding:6px 9px 5px;border-radius:10px;
+  background:rgba(38,22,17,.95);
+  border:1px solid rgba(255,196,120,.38);
+  box-shadow:0 6px 16px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,222,175,.12),0 0 18px rgba(255,150,60,.10);
+  color:#ffe6c4;font-size:11px;line-height:1.55;letter-spacing:.3px;
+  text-align:center;white-space:normal;word-break:break-word;
+  transform:translateY(-100%);transform-origin:50% 100%;
+  animation:bubbleLife 2.2s ease forwards;
+}
+.cust-bubble.no-tail::after{display:none}
+.cust-bubble::after{
+  content:"";position:absolute;left:var(--tail-x,50%);bottom:-5px;
+  transform:translateX(-50%);width:0;height:0;
+  border:5px solid transparent;border-top-color:rgba(38,22,17,.95);border-bottom:0;
+}
+@keyframes bubbleLife{
+  0%{opacity:0;transform:translateY(calc(-100% + 7px)) scale(.9)}
+  14%{opacity:1;transform:translateY(-100%) scale(1)}
+  78%{opacity:1;transform:translateY(-100%)}
+  100%{opacity:0;transform:translateY(calc(-100% - 6px))}
+}
+
 .toast{
   position:absolute;right:0;bottom:90px;left:auto;top:auto;
   transform:translateY(8px);
@@ -830,4 +855,5 @@ body{
     animation-iteration-count:1 !important;
     transition-duration:.001s !important;
   }
+  .cust-bubble{animation:none!important;opacity:1;transform:translateY(-100%)}
 }

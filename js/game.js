@@ -419,7 +419,12 @@
     else popText(`+${fmt(gain)}`, null, 0.5, 0.42);
     sfx.serve();
     rememberLine(c.line);
+    dropBubble(c);
     syncQueue();
+  }
+
+  function dropBubble(c) {
+    if (c && c.bubble) { c.bubble.remove(); c.bubble = null; }
   }
 
   function rememberLine(text) {
@@ -438,6 +443,7 @@
     if (st.rep > 0) st.rep = Math.max(0, st.rep - 2);
     const n = nodes.get(c.id);
     if (n) popAt(n.el, '差评 -2', true);
+    dropBubble(c);
     sfx.bad();
     syncQueue();
     toast('客人等急了，甩门走了…');
@@ -476,14 +482,54 @@
   }
 
   /* ---------------- 交互 ---------------- */
-  function tapCook() {
+  function tapCook(el) {
     audio();
     mainBtn.classList.remove('is-hint');
+    if (el && el.classList.contains('cust')) {
+      const c = custs.find(x => x.id === Number(el.dataset.id));
+      if (c) sayBubble(el, c);
+    }
     if (!custs.length) return;
     const target = cookTimeFor(custs[0]);
     cook += target * 0.09;          // 每点一下推进约 9%
     sfx.tap();
     if (cook >= target) serve();
+  }
+
+  /* 点顾客冒一句小气泡：每人同时只留一个，重复点击只换内容不叠加 */
+  function sayBubble(el, c) {
+    if (!c || !c.line) return;
+    if (c.bubble && c.bubble.parentNode) c.bubble.remove();
+    const appR = $('app').getBoundingClientRect();
+    const face = el.querySelector('.cust-face') || el;
+    const f = face.getBoundingClientRect();
+    const b = document.createElement('div');
+    b.className = 'cust-bubble';
+    b.setAttribute('aria-hidden', 'true');
+    b.textContent = c.line;
+    floatLayer.appendChild(b);
+    const bw = b.offsetWidth, bh = b.offsetHeight;
+    const pad = 8;
+    const cx = f.left - appR.left + f.width / 2;
+    const left = Math.max(pad, Math.min(appR.width - bw - pad, cx - bw / 2));
+    let bottom = f.top - appR.top - 8;   // 气泡底边贴顾客头顶
+    // 空间被压到进度条上时（极矮窗口），把气泡抬到进度条上方
+    const track = document.querySelector('.cook-track');
+    if (track) {
+      const t = track.getBoundingClientRect();
+      const tTop = t.top - appR.top, tBot = t.bottom - appR.top;
+      if (bottom > tTop - 10 && bottom - bh < tBot + 10) bottom = Math.min(bottom, tTop - 4);
+    }
+    bottom = Math.max(bh + 4, bottom);
+    if (f.top - appR.top - bottom > 26) b.classList.add('no-tail');
+    b.style.left = left + 'px';
+    b.style.top = bottom + 'px';
+    b.style.setProperty('--tail-x', Math.max(12, Math.min(bw - 12, cx - left)) + 'px');
+    c.bubble = b;
+    setTimeout(() => {
+      b.remove();
+      if (c.bubble === b) c.bubble = null;
+    }, 2300);
   }
 
   /* ---------------- 主循环 ---------------- */
