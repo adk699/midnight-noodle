@@ -127,6 +127,63 @@
     return pool[Math.floor(Math.random() * pool.length)];
   }
 
+  /* ---------------- 常客簿 ---------------- */
+  /* 常客：固定形象与口味，来店次数解锁心声；4 颗心后给一句结局 */
+  const GUEST_HEARTS = [2, 5, 9, 14];
+  const GUESTS = [
+    { id: 'xiaoman', name: '小满', role: '夜班护士', look: 2, dish: '阳春面',
+      lines: ['刚下夜班，手还是凉的。', '病房里的灯，比这盏还亮。', '今天送走了一位老病人……吃口热的就好了。', '谢谢你每晚都给我留一碗。'],
+      ending: '小满把值班表折好，压在碗底：下夜班还来。' },
+    { id: 'laozhou', name: '老周', role: '出租车司机', look: 5, dish: '牛肉面',
+      lines: ['跑了一整天，就馋这口。', '后座刚送完一个喝多的。', '油价又涨了，日子还得过。', '你这店，比我车里还暖和。'],
+      ending: '老周说，以后收车就停你门口。' },
+    { id: 'azhe', name: '阿哲', role: '考研学生', look: 3, dish: '酸辣粉',
+      lines: ['再刷一套题就来。', '图书馆关门了，就你这还亮着。', '有点撑不住了。', '等我考完，请你吃喜糖。'],
+      ending: '阿哲把录取通知书的照片塞进留言墙。' },
+    { id: 'xiaolin', name: '小林', role: '便利店店员', look: 6, dish: '小馄饨',
+      lines: ['换班了，终于能吃口热的。', '今天关东煮卖得特别好。', '客人很少，夜里真安静。', '我们两家的灯，一起亮着。'],
+      ending: '小林送来一盒关东煮，说换换口味。' },
+    { id: 'akai', name: '阿凯', role: '代驾', look: 1, dish: '炸酱面',
+      lines: ['刚把客人送回家。', '夜里路空，开得慢。', '有时候也想有人送我回家。', '你这碗面，算我的家。'],
+      ending: '阿凯把车停在门口，进来吃了碗面。' },
+    { id: 'chenyi', name: '陈姨', role: '清洁工', look: 7, dish: '葱油拌面',
+      lines: ['扫完这条街，脚都站麻了。', '天亮前得把地再扫一遍。', '年轻时也开过小店。', '你这招牌，跟我那会儿一样。'],
+      ending: '陈姨把门口扫得干干净净，才坐下。' }
+  ];
+  const guestHearts = visits => GUEST_HEARTS.filter(t => visits >= t).length;
+  const guestOf = id => GUESTS.find(g => g.id === id) || null;
+  const latestGuestLine = (g, visits) => {
+    const h = guestHearts(visits);
+    return h > 0 ? g.lines[h - 1] : '';
+  };
+
+  /* 常客来店一次：涨常客度，满心时解锁心声；四颗心给结局 */
+  function recordGuestVisit(id) {
+    const g = guestOf(id);
+    if (!g || !st.guests || !st.guests[id]) return;
+    const rec = st.guests[id];
+    const before = guestHearts(rec.visits);
+    rec.visits++;
+    if (st.daily) {
+      st.daily.guests = st.daily.guests || {};
+      st.daily.guests[id] = (st.daily.guests[id] || 0) + 1;
+    }
+    const after = guestHearts(rec.visits);
+    if (after > before) {
+      st.rep = Math.min(300, st.rep + 1);
+      if (after >= 4) {
+        rememberLine(g.ending);
+        toast(`常客「${g.name}」四颗心满了`, 3200);
+      } else {
+        const line = g.lines[after - 1];
+        rememberLine(line);
+        toast(`常客「${g.name}」：${line}`, 3400);
+      }
+      saveState();
+      if (currentTab === 'shop') updatePanel();
+    }
+  }
+
   /* 门店扩张：按本周目进账自动升级，永久提升单价 */
   const STORES = [
     { name: '路边摊',   at: 0,      mul: 1.00 },
@@ -157,7 +214,11 @@
       sfx: true,
       bgm: true,
       tutorialDone: false,
-      daily: { date: '', orders: 0, earn: 0, upg: 0, claimed: {} },
+      daily: { date: '', orders: 0, earn: 0, upg: 0, claimed: {}, guests: {} },
+      guests: GUESTS.reduce((o, g) => { o[g.id] = { visits: 0 }; return o; }, {}),  // 常客：{ id: { visits } }
+      streak: 0,          // 连续营业天数
+      lastDay: '',        // 上次开店的日期（todayKey）
+      dish: { date: '', claimed: false },  // 今日小菜
       wall: []
     };
   }
@@ -177,8 +238,213 @@
   function checkDaily() {
     if (!st.daily || st.daily.date !== todayKey()) {
       // 只重置每日任务，不写存档：saveState 会把 lastSave 改成现在，吃掉离线收益
-      st.daily = { date: todayKey(), orders: 0, earn: 0, upg: 0, claimed: {} };
+      st.daily = { date: todayKey(), orders: 0, earn: 0, upg: 0, claimed: {}, guests: {} };
     }
+  }
+
+  /* 连续营业与今日小菜：跨天滚动，只在内存里改，不写存档 */
+  function yesterdayKey() {
+    const d = new Date();
+    d.setDate(d.getDate() - 1);
+    return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+  }
+
+  function rollDay() {
+    const today = todayKey();
+    if (st.lastDay === today) return;
+    st.streak = st.lastDay === yesterdayKey() ? Math.min(st.streak + 1, 30) : 1;
+    st.lastDay = today;
+    st.dish = { date: today, claimed: false };
+  }
+
+  const dishGift = () => 20 + (Math.min(Math.max(st.streak, 1), 5) - 1) * 10;  // 20/30/40/50/60
+
+  function claimDish() {
+    if (st.dish.claimed) { toast('今天的小菜已经端上来了'); return; }
+    const gold = dishGift();
+    st.dish.claimed = true;
+    addMoney(gold);
+    st.rep = Math.min(300, st.rep + 1);
+    saveState();
+    toast(`今日小菜 +${gold} 金 · 连续营业 ${st.streak} 天`);
+    popText(`+${fmt(gold)}`, '#ffd27a', 0.5, 0.4);
+    updatePanel();
+  }
+
+  /* ---------------- 常客簿 / 打烊日签 ---------------- */
+  function showGuestBook() {
+    const rows = GUESTS.map(g => {
+      const v = (st.guests[g.id] || {}).visits || 0;
+      const h = guestHearts(v);
+      const hearts = '♥'.repeat(h) + '♡'.repeat(4 - h);
+      const line = v >= 14 ? g.ending : (latestGuestLine(g, v) || '还没说过话。');
+      return `<div style="padding:8px 0;border-bottom:1px solid rgba(255,220,180,.12)">
+        <div style="display:flex;align-items:baseline;gap:6px;font-size:13px;color:#ffe6c0">
+          <b>${g.name}</b><span style="font-size:11px;color:#9c8773">${g.role}</span>
+          <span style="margin-left:auto;color:#e0a86a;font-size:12px;letter-spacing:1px">${hearts}</span>
+        </div>
+        <div style="font-size:11px;color:#9c8773;margin-top:2px">来店 ${v} 次</div>
+        <div style="font-size:12px;color:rgba(255,230,200,.78);margin-top:4px;line-height:1.6">「${line}」</div>
+      </div>`;
+    }).join('');
+    openModal('常客簿', `<div style="text-align:left;max-height:56vh;overflow:auto">${rows}</div>`, '知道了', closeModal);
+  }
+
+  function daySummary() {
+    const dg = (st.daily && st.daily.guests) || {};
+    let top = null, n = 0;
+    for (const id of Object.keys(dg)) {
+      if (dg[id] > n) { n = dg[id]; top = guestOf(id); }
+    }
+    const wall = Array.isArray(st.wall) ? st.wall : [];
+    const d = new Date();
+    return {
+      date: `${d.getFullYear()}.${d.getMonth() + 1}.${d.getDate()}`,
+      orders: (st.daily && st.daily.orders) || 0,
+      earn: (st.daily && st.daily.earn) || 0,
+      streak: Math.max(1, st.streak || 1),
+      top: top ? `${top.name} · ${top.role}` : '今晚都是新面孔',
+      topN: n,
+      line: wall.length ? wall[wall.length - 1].text : '今晚还没有人留下话。'
+    };
+  }
+
+  function wrapText(g, text, x, y, maxW, lh) {
+    let line = '';
+    for (const ch of text) {
+      if (g.measureText(line + ch).width > maxW) {
+        g.fillText(line, x, y);
+        line = ch;
+        y += lh;
+      } else {
+        line += ch;
+      }
+    }
+    if (line) g.fillText(line, x, y);
+    return y;
+  }
+
+  function drawReceipt(cv, d) {
+    const g = cv.getContext('2d');
+    const W = cv.width, H = cv.height;
+    const bg = g.createLinearGradient(0, 0, 0, H);
+    bg.addColorStop(0, '#241713');
+    bg.addColorStop(1, '#0c0807');
+    g.fillStyle = bg;
+    g.fillRect(0, 0, W, H);
+
+    // 灯光
+    g.globalAlpha = 0.5;
+    for (const [x, y, r] of [[80, 120, 60], [W - 70, 180, 42], [110, 760, 34], [W - 90, 700, 50]]) {
+      const lg = g.createRadialGradient(x, y, 0, x, y, r);
+      lg.addColorStop(0, 'rgba(255,190,110,.55)');
+      lg.addColorStop(1, 'rgba(255,190,110,0)');
+      g.fillStyle = lg;
+      g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fill();
+    }
+    g.globalAlpha = 1;
+
+    // 招牌
+    g.textAlign = 'center';
+    g.fillStyle = '#ffe7c2';
+    g.font = 'bold 46px "Microsoft YaHei","PingFang SC",sans-serif';
+    g.fillText('深夜面馆', W / 2, 110);
+    g.font = '20px "Microsoft YaHei","PingFang SC",sans-serif';
+    g.fillStyle = 'rgba(255,215,170,.66)';
+    g.fillText('今 日 打 烊', W / 2, 148);
+
+    // 日期与连续营业
+    g.font = '18px "Microsoft YaHei","PingFang SC",sans-serif';
+    g.fillStyle = 'rgba(255,230,200,.55)';
+    g.fillText(`${d.date} · 连续营业 ${d.streak} 天`, W / 2, 188);
+
+    // 分隔线
+    g.strokeStyle = 'rgba(255,200,140,.25)';
+    g.lineWidth = 1;
+    g.beginPath(); g.moveTo(70, 220); g.lineTo(W - 70, 220); g.stroke();
+
+    // 三格数据
+    const cols = [
+      ['出餐', `${d.orders}`, '碗'],
+      ['今日进账', fmt(d.earn), '金币'],
+      ['常客', `${d.topN || 0}`, '次']
+    ];
+    cols.forEach(([label, val, unit], i) => {
+      const cx = W / 3 * i + W / 6;
+      g.fillStyle = 'rgba(255,230,200,.6)';
+      g.font = '18px "Microsoft YaHei","PingFang SC",sans-serif';
+      g.fillText(label, cx, 272);
+      g.fillStyle = '#ffd27a';
+      g.font = 'bold 46px "Microsoft YaHei","PingFang SC",sans-serif';
+      g.fillText(val, cx, 330);
+      g.fillStyle = 'rgba(255,230,200,.5)';
+      g.font = '15px "Microsoft YaHei","PingFang SC",sans-serif';
+      g.fillText(unit, cx, 356);
+    });
+
+    // 常客与留言
+    g.textAlign = 'left';
+    g.fillStyle = 'rgba(255,230,200,.6)';
+    g.font = '18px "Microsoft YaHei","PingFang SC",sans-serif';
+    g.fillText('今晚最常来的人', 70, 430);
+    g.fillStyle = '#ffe6c0';
+    g.font = 'bold 30px "Microsoft YaHei","PingFang SC",sans-serif';
+    g.fillText(d.top, 70, 474);
+
+    g.fillStyle = 'rgba(255,230,200,.6)';
+    g.font = '18px "Microsoft YaHei","PingFang SC",sans-serif';
+    g.fillText('留在墙上的一句话', 70, 552);
+    g.fillStyle = 'rgba(255,235,205,.9)';
+    g.font = '24px "Microsoft YaHei","PingFang SC",sans-serif';
+    wrapText(g, `「${d.line}」`, 70, 596, W - 140, 40);
+
+    // 票据细节
+    g.textAlign = 'center';
+    g.fillStyle = 'rgba(255,220,180,.4)';
+    g.font = '16px "Microsoft YaHei","PingFang SC",sans-serif';
+    g.fillText('一 盏 灯 · 一 口 锅 · 一 碗 热 汤 面', W / 2, 748);
+
+    g.strokeStyle = 'rgba(255,200,140,.18)';
+    g.beginPath(); g.moveTo(70, 786); g.lineTo(W - 70, 786); g.stroke();
+
+    g.fillStyle = 'rgba(255,230,200,.55)';
+    g.font = '16px "Microsoft YaHei","PingFang SC",sans-serif';
+    g.fillText('TapTap 搜索「深夜面馆」', W / 2, 828);
+    g.fillStyle = 'rgba(255,230,200,.3)';
+    g.font = '14px "Microsoft YaHei","PingFang SC",sans-serif';
+    g.fillText('· 打烊后，灯还亮着 ·', W / 2, 858);
+  }
+
+  function saveReceipt(cv) {
+    if (!cv) return;
+    try {
+      cv.toBlob(blob => {
+        if (!blob) { toast('保存失败，可长按图片保存'); return; }
+        const a = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        a.href = url;
+        a.download = '深夜面馆-日签.png';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1500);
+        toast('日签已生成');
+      }, 'image/png');
+    } catch (e) {
+      toast('保存失败，可长按图片保存');
+    }
+  }
+
+  function showReceipt() {
+    const d = daySummary();
+    openModal('打烊日签',
+      `<canvas id="receiptCanvas" width="640" height="900" style="width:100%;max-width:320px;border-radius:14px;display:block;margin:0 auto"></canvas>
+       <div style="font-size:11px;color:#9c8773;margin-top:8px">保存失败的话，长按图片保存</div>`,
+      '保存图片',
+      () => saveReceipt($('receiptCanvas')),
+      '关闭');
+    const cv = $('receiptCanvas');
+    if (cv) drawReceipt(cv, d);
   }
 
   let st = loadState();
@@ -216,6 +482,17 @@
       if (!merged.daily || typeof merged.daily !== 'object') merged.daily = base.daily;
       if (!merged.daily.claimed || typeof merged.daily.claimed !== 'object') merged.daily.claimed = {};
       merged.wall = Array.isArray(merged.wall) ? merged.wall.filter(x => x && typeof x.text === 'string') : [];
+      merged.streak = Math.max(0, Math.floor(num(s.streak, 0)));
+      merged.lastDay = typeof s.lastDay === 'string' ? s.lastDay : '';
+      merged.dish = (s.dish && typeof s.dish === 'object' && typeof s.dish.date === 'string')
+        ? { date: s.dish.date, claimed: !!s.dish.claimed }
+        : base.dish;
+      merged.guests = {};
+      for (const g of GUESTS) {
+        const v = s.guests && s.guests[g.id];
+        merged.guests[g.id] = { visits: Math.max(0, Math.floor(num(v && v.visits, 0))) };
+      }
+      merged.daily.guests = (merged.daily.guests && typeof merged.daily.guests === 'object') ? merged.daily.guests : {};
       if (!merged.cd || typeof merged.cd !== 'object') merged.cd = base.cd;
       if (!merged.boost || typeof merged.boost !== 'object') merged.boost = base.boost;
       return merged;
@@ -334,6 +611,17 @@
   };
 
   let seasonTimer = null;
+  /* 常客点一下的短语音：每个角色一种音高，两声轻哼 */
+  const GUEST_VOICE = {
+    xiaoman: [560, 680], laozhou: [320, 390], azhe: [440, 540],
+    xiaolin: [600, 720], akai: [300, 360], chenyi: [380, 470]
+  };
+  function guestVoice(id) {
+    const p = GUEST_VOICE[id];
+    if (!p || !st.sfx) return;
+    tone(p[0], 0.06, 'triangle', 0.03);
+    tone(p[1], 0.13, 'triangle', 0.024, 0.07);
+  }
   function startSeasonAmbience() {
     if (seasonTimer) return;
     seasonTimer = setInterval(() => {
@@ -446,11 +734,23 @@
   /* ---------------- 顾客 ---------------- */
   function addCustomer() {
     const pool = dishPool();
+    const guest = Math.random() < 0.3 ? GUESTS[Math.floor(Math.random() * GUESTS.length)] : null;
+    let dish = pool[Math.floor(Math.random() * pool.length)];
+    let line = pickLine();
+    if (guest) {
+      const want = pool.find(d => d.name === guest.dish);
+      if (want) dish = want;                 // 常客有自己的口味，菜单里有就点它
+      const hearts = guestHearts(st.guests[guest.id] ? st.guests[guest.id].visits : 0);
+      if (hearts > 0) line = guest.lines[hearts - 1];
+    }
     const c = {
       id: ++custSeq,
-      look: Math.floor(Math.random() * LOOKS),
-      dish: pool[Math.floor(Math.random() * pool.length)],
-      line: pickLine(),
+      look: guest ? guest.look : Math.floor(Math.random() * LOOKS),
+      dish,
+      line,
+      guest: guest ? guest.id : null,
+      guestName: guest ? guest.name : '',
+      guestIndex: guest ? GUESTS.findIndex(g => g.id === guest.id) : -1,
       patience: patienceSec(),
       max: patienceSec(),
       mood: 'happy'
@@ -469,8 +769,8 @@
         el.type = 'button';
         el.className = 'cust mood-happy';
         el.dataset.id = String(c.id);
-        el.setAttribute('aria-label', `为顾客加速：${c.dish.name}`);
-        el.innerHTML = `<div class="cust-face"><i class="cust-sprite" style="--look:${c.look}"></i></div><div class="cust-patience"><i></i></div><div class="cust-dish">${c.dish.name}</div>`;
+        el.setAttribute('aria-label', `${c.guest ? '常客' + c.guestName : '顾客'}：${c.dish.name}`);
+        el.innerHTML = `<div class="cust-face"><i class="cust-sprite${c.guest ? ' is-guest' : ''}" style="--look:${c.look};--g:${c.guestIndex};--f:0"></i></div><div class="cust-patience"><i></i></div><div class="cust-dish">${c.guest ? '★ ' : ''}${c.dish.name}</div>`;
         el.addEventListener('click', () => tapCook(el));
         nodes.set(c.id, { el, bar: el.querySelector('.cust-patience i') });
         queueEl.appendChild(el);
@@ -502,6 +802,7 @@
     addMoney(gain);
     st.orders++;
     if (st.daily) { st.daily.orders++; st.daily.earn += gain; }
+    if (c.guest) recordGuestVisit(c.guest);
     const before = Math.floor((st.orders - 1) / 12);
     const after = Math.floor(st.orders / 12);
     if (after > before && st.rep < 300) {
@@ -513,7 +814,7 @@
     if (n) popAt(n.el, `+${fmt(gain)}`, false);
     else popText(`+${fmt(gain)}`, null, 0.5, 0.42);
     sfx.serve();
-    rememberLine(c.line);
+    rememberLine(c.guest ? null : c.line);
     dropBubble(c);
     syncQueue();
   }
@@ -582,7 +883,17 @@
     mainBtn.classList.remove('is-hint');
     if (el && el.classList.contains('cust')) {
       const c = custs.find(x => x.id === Number(el.dataset.id));
-      if (c) sayBubble(el, c);
+      if (c) {
+        sayBubble(el, c);
+        if (c.guest) {
+          const sp = el.querySelector('.cust-sprite');
+          if (sp) {
+            sp.style.setProperty('--f', '3');   // 专属小动作
+            setTimeout(() => { if (sp.isConnected) sp.style.setProperty('--f', '0'); }, 1200);
+          }
+          guestVoice(c.guest);
+        }
+      }
     }
     if (!custs.length) return;
     const target = cookTimeFor(custs[0]);
@@ -826,6 +1137,26 @@
           </div>
           <div class="wall-list"></div>
         </div>
+        <button class="card" type="button" data-s="guests">
+          <div class="card-ico"><img class="card-ico-img" src="assets/icons/armchair.svg" alt="" width="24" height="24"></div>
+          <div class="card-main"><div class="card-name">常客簿 <span class="card-lv"></span></div><div class="card-desc"></div></div>
+          <div class="card-cost">›</div>
+        </button>
+        <button class="card" type="button" data-s="dish">
+          <div class="card-ico"><img class="card-ico-img" src="assets/icons/gift.svg" alt="" width="24" height="24"></div>
+          <div class="card-main"><div class="card-name">今日小菜 <span class="card-lv"></span></div><div class="card-desc">每天回来，锅里多一样小菜</div></div>
+          <div class="card-cost"></div>
+        </button>
+        <button class="card" type="button" data-s="receipt">
+          <div class="card-ico"><img class="card-ico-img" src="assets/icons/book-open.svg" alt="" width="24" height="24"></div>
+          <div class="card-main"><div class="card-name">打烊日签</div><div class="card-desc">今天的营业额，做成一张小票</div></div>
+          <div class="card-cost">›</div>
+        </button>
+        <a class="card" data-m="review" href="https://www.taptap.cn/app/1015083/review" target="_blank" rel="noopener noreferrer">
+          <div class="card-ico"><img class="card-ico-img" src="assets/icons/lamp.svg" alt="" width="24" height="24"></div>
+          <div class="card-main"><div class="card-name">去 TapTap 聊聊这家店</div><div class="card-desc">好坏都行，留一句真实感受</div></div>
+          <div class="card-cost">↗</div>
+        </a>
         <button class="card" type="button" data-m="sfx">
           <div class="card-ico"><img class="card-ico-img" src="assets/icons/volume-2.svg" alt="" width="24" height="24"></div>
           <div class="card-main"><div class="card-name">音效</div></div>
@@ -847,6 +1178,9 @@
           <div class="card-cost"></div>
         </button>`;
       tabBody.querySelector('[data-s="broth"]').addEventListener('click', confirmPrestige);
+      tabBody.querySelector('[data-s="dish"]').addEventListener('click', claimDish);
+      tabBody.querySelector('[data-s="guests"]').addEventListener('click', showGuestBook);
+      tabBody.querySelector('[data-s="receipt"]').addEventListener('click', showReceipt);
       tabBody.querySelector('[data-m="sfx"]').addEventListener('click', () => {
         st.sfx = !st.sfx; saveState(); syncMuteUI(); updatePanel();
         if (st.sfx) sfx.buy();
@@ -953,6 +1287,24 @@
           empty.textContent = '今晚还没有人留下话。';
           list.appendChild(empty);
         }
+      }
+      const gCard = tabBody.querySelector('[data-s="guests"]');
+      if (gCard) {
+        const known = GUESTS.filter(g => (st.guests[g.id] || {}).visits > 0).length;
+        gCard.querySelector('.card-lv').textContent = known ? `${known} 位` : '';
+        gCard.querySelector('.card-desc').textContent = known
+          ? '常来的人，会慢慢说出心里话'
+          : '还没有常客，多开几天';
+      }
+      const dCard = tabBody.querySelector('[data-s="dish"]');
+      if (dCard) {
+        const claimed = !!(st.dish && st.dish.claimed);
+        dCard.querySelector('.card-lv').textContent = `连续 ${st.streak} 天`;
+        dCard.querySelector('.card-cost').innerHTML = claimed
+          ? '已领'
+          : `+${dishGift()}<span class="cost-unit">金</span>`;
+        dCard.classList.toggle('is-max', claimed);
+        dCard.classList.toggle('can-buy', !claimed);
       }
       const sfxCard = tabBody.querySelector('[data-m="sfx"]');
       if (sfxCard) {
@@ -1152,13 +1504,17 @@
     const bgmOn = st.bgm;
     const wall = Array.isArray(st.wall) ? st.wall.slice() : [];
     const claimed = st.daily && st.daily.claimed ? Object.assign({}, st.daily.claimed) : {};
+    const streak = st.streak, lastDay = st.lastDay, dish = st.dish;
+    const guests = st.guests;
     st = freshState();
     st.broth = broth;
     st.money = 30 + broth * 10;
     st.sfx = sfxOn;
     st.bgm = bgmOn;
     st.wall = wall;                       // 留言是回忆，转生不抹
-    st.daily = { date: todayKey(), orders: 0, earn: 0, upg: 0, claimed };
+    st.streak = streak; st.lastDay = lastDay; st.dish = dish;  // 连续营业不因转生中断
+    st.guests = guests;                   // 常客簿是回忆，转生保留
+    st.daily = { date: todayKey(), orders: 0, earn: 0, upg: 0, claimed, guests: {} };
     custs.length = 0;
     nodes.forEach(n => n.el.remove());
     nodes.clear();
@@ -1179,6 +1535,8 @@
       st = freshState();
       st.sfx = sfxOn;
       st.bgm = bgmOn;
+      st.streak = 1; st.lastDay = todayKey();
+      st.dish = { date: todayKey(), claimed: true };
       custs.length = 0;
       nodes.forEach(n => n.el.remove());
       nodes.clear();
@@ -1289,6 +1647,7 @@
     bindUI();
     syncMuteUI();
     checkDaily();
+    rollDay();
     const hashTab = (location.hash.match(/^#tab-(upgrade|daily|boost|shop)/) || [])[1];
     if (hashTab) {
       currentTab = hashTab;

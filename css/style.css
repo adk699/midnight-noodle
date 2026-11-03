@@ -510,6 +510,13 @@ body{
   image-rendering:pixelated;
   animation:custIdle .9s steps(4) infinite;
 }
+/* 常客专属立绘：6 人 × 4 表情（0 平静 / 1 开心 / 2 疲惫 / 3 专属动作） */
+.cust-sprite.is-guest{
+  background-image:url(../assets/customers/guests_idle.png);
+  background-size:192px 1152px;
+  background-position-y:calc((var(--g, 0) * 4 + var(--f, 0)) * -48px);
+}
+.cust.mood-angry .cust-sprite.is-guest{--f:2}
 @keyframes custIdle{from{background-position-x:0}to{background-position-x:-192px}}
 .cust.mood-angry .cust-face::after{
   content:"!";position:absolute;right:-2px;top:-3px;width:16px;height:16px;
@@ -576,7 +583,12 @@ body{
 /* 长文案卡片（日常任务 / 店面与老汤）占满整行，避免名称换行 */
 .card[data-d]{grid-column:span 2}
 .card[data-s="store"],
-.card[data-s="broth"]{grid-column:span 2}
+.card[data-s="broth"],
+.card[data-s="dish"],
+.card[data-s="guests"],
+.card[data-s="receipt"],
+.card[data-m="review"]{grid-column:span 2}
+a.card{text-decoration:none}
 .card-note{grid-column:span 2;justify-content:center}
 .card-wall{
   grid-column:span 2;flex-direction:column;align-items:stretch;justify-content:flex-start;
@@ -909,7 +921,7 @@ body{
   .stats{gap:12px}
   .stat-val{font-size:20px}
   .tab-body{grid-template-columns:1fr}
-  .card[data-d],.card[data-s="store"],.card[data-s="broth"],.card-note,.card-wall{grid-column:auto}
+  .card[data-d],.card[data-s="store"],.card[data-s="broth"],.card[data-s="dish"],.card[data-s="guests"],.card[data-s="receipt"],.card[data-m="review"],.card-note,.card-wall{grid-column:auto}
 }
 
 /* ---------- 无障碍：减少动效 ---------- */
